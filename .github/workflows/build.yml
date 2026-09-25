@@ -1,0 +1,123 @@
+# Checks every push and pull request, and publishes a draft GitHub release on v* tags.
+# v0.1 supports macOS only, so everything runs on macOS; Windows and Linux jobs come with
+# their catalogs.
+#
+# Signing: with no secrets, the app gets an ad hoc signature (macOS warns on first launch and
+# asks for Full Disk Access again after each update). With the repository secrets below, it is
+# signed with a Developer ID and notarized. See RELEASING.md.
+#   APPLE_CERTIFICATE           base64 of the Developer ID Application .p12
+#   APPLE_CERTIFICATE_PASSWORD  password of the .p12
+#   APPLE_SIGNING_IDENTITY      "Developer ID Application: Name (TEAMID)"
+#   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID   notarization (app-specific password)
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token everywhere except the release job.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  # The required status check for pull requests; keep the name stable.
+  check:
+    name: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  macos:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The tag must match the version the app reports, or the release would lie about itself.
+      - run: |
+          tag="${GITHUB_REF_NAME#v}"
+          npm_version=$(jq -r .version package.json)
+          cargo_version=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+          if [ "$tag" != "$npm_version" ] || [ "$tag" != "$cargo_version" ]; then
+            echo "Tag $GITHUB_REF_NAME, package.json $npm_version, Cargo.toml $cargo_version: they must match." >&2
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      # Signing variables are only set when the secrets exist, so a fork builds ad hoc signed.
+      - env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            value="${!name}"
+            if [ -n "$value" ]; then
+              echo "$name<<EOF" >> "$GITHUB_ENV"
+              echo "$value" >> "$GITHUB_ENV"
+              echo "EOF" >> "$GITHUB_ENV"
+            fi
+          done
+      # One universal build that runs on Apple silicon and Intel Macs.
+      - run: pnpm tauri build --target universal-apple-darwin --bundles dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sweepr-macos
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sweepr-*
+          merge-multiple: true
+          path: dist
+      - run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      # A draft: the maintainer reads the notes, then publishes it by hand.
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Sweepr ${{ github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: dist/*
