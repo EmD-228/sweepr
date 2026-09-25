@@ -1,0 +1,56 @@
+# Développeurs — artefacts de projets (SPEC section 5.4)
+#
+# `artifacts` : dossiers relatifs à la racine du projet. `**/nom` cherche le nom à toute profondeur.
+# Un projet peut relever de plusieurs écosystèmes (React Native est aussi un projet Node) :
+# ses artefacts sont alors cumulés.
+# La consigne de régénération précise est calculée par le code (gestionnaire de paquets, version de Node).
+
+[[ecosystem]]
+id = "node"
+name = "Node"
+detect = { any_file = ["package.json"] }
+artifacts = ["node_modules", ".next", "out", ".nuxt", ".output", ".data", "dist", ".turbo", ".vercel", ".cache"]
+risk = 1
+regenerate = "Réinstaller les dépendances avec le gestionnaire du projet, puis relancer `dev` ou `build`."
+
+[[ecosystem]]
+id = "react-native"
+name = "React Native / Expo"
+detect = { any_file = ["package.json"], package_json_dependency = "react-native" }
+artifacts = ["android/app/build", "android/app/.cxx", "android/.gradle", "ios/Pods", ".expo"]
+risk = 1
+regenerate = "Réinstaller les dépendances, `pod install` dans `ios`, puis relancer l'app."
+
+[[ecosystem]]
+id = "flutter"
+name = "Flutter"
+detect = { any_file = ["pubspec.yaml"] }
+artifacts = ["build", ".dart_tool", "ios/Pods", "macos/Pods", "android/.gradle"]
+risk = 1
+official_command = { program = "flutter", args = ["clean"] }
+regenerate = "`flutter pub get`, `pod install` dans `ios`, puis `flutter run`."
+
+[[ecosystem]]
+id = "rust"
+name = "Rust"
+detect = { any_file = ["Cargo.toml"] }
+artifacts = ["target"]
+risk = 1
+official_command = { program = "cargo", args = ["clean"] }
+regenerate = "`cargo build`. Le premier build après nettoyage est long."
+
+[[ecosystem]]
+id = "tauri"
+name = "Tauri"
+detect = { any_file = ["src-tauri/Cargo.toml"] }
+artifacts = ["src-tauri/target", "src-tauri/gen/android/app/build"]
+risk = 1
+regenerate = "`cargo build` dans `src-tauri`, ou lancer l'app en mode développement. Le premier build est long."
+
+[[ecosystem]]
+id = "python"
+name = "Python"
+detect = { any_file = ["pyproject.toml", "requirements.txt"] }
+artifacts = [".venv", "venv", "**/__pycache__"]
+risk = 1
+regenerate = "Recréer l'environnement virtuel (`python -m venv .venv`) et réinstaller les dépendances."

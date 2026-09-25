@@ -1,0 +1,196 @@
+# Développeurs — outils et caches globaux (SPEC section 5.5)
+#
+# Les commandes sont des `argv` fixes, jamais passées à un shell, lancées depuis le dossier personnel.
+# `measure` liste les dossiers dont la taille estime le gain ; vide quand on ne peut pas le savoir avant.
+
+[[rule]]
+id = "dev.npm-cache"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Cache npm"
+summary = "Paquets téléchargés par npm, gardés pour les installations suivantes."
+risk = 0
+loses = "Rien. Les prochains `npm install` retéléchargeront les paquets manquants."
+regenerate = "Automatique à la prochaine installation."
+requires = ["npm"]
+target = { kind = "command", program = "npm", args = ["cache", "clean", "--force"], measure = ["~/.npm/_cacache"] }
+
+[[rule]]
+id = "dev.pnpm-store"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Store pnpm (paquets inutilisés)"
+summary = "Paquets du store pnpm qu'aucun projet n'utilise plus."
+risk = 0
+loses = "Rien : seuls les paquets inutilisés sont retirés."
+regenerate = "Automatique si un projet en a de nouveau besoin."
+requires = ["pnpm"]
+note = "Le gain n'est connu qu'après : pnpm ne dit pas à l'avance quels paquets sont inutilisés."
+target = { kind = "command", program = "pnpm", args = ["store", "prune"] }
+
+[[rule]]
+id = "dev.yarn-cache"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Cache Yarn"
+summary = "Paquets téléchargés par Yarn, gardés pour les installations suivantes."
+risk = 0
+loses = "Rien. Les prochains `yarn install` retéléchargeront les paquets manquants."
+regenerate = "Automatique à la prochaine installation."
+requires = ["yarn"]
+target = { kind = "command", program = "yarn", args = ["cache", "clean"], measure = ["~/Library/Caches/Yarn"] }
+
+[[rule]]
+id = "dev.cocoapods-cache"
+profile = "developer"
+category = "developer"
+platforms = ["macos"]
+title = "Cache CocoaPods"
+summary = "Pods téléchargés par CocoaPods, gardés pour les installations suivantes."
+risk = 0
+loses = "Rien. Le prochain `pod install` retéléchargera les pods."
+regenerate = "Automatique au prochain `pod install`."
+requires = ["pod"]
+target = { kind = "command", program = "pod", args = ["cache", "clean", "--all"], measure = ["~/Library/Caches/CocoaPods"] }
+
+[[rule]]
+id = "dev.gradle-cache"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Cache Gradle"
+summary = "Dépendances et distributions Gradle téléchargées pour les projets Android."
+risk = 1
+loses = "Le prochain build Android retéléchargera ses dépendances et sera plus long."
+regenerate = "Automatique au prochain build Gradle."
+note = "`~/.gradle/gradle.properties` (identifiants de signature) n'est jamais touché."
+target = { kind = "paths", paths = ["~/.gradle/caches", "~/.gradle/wrapper"], exclude = ["~/.gradle/gradle.properties"] }
+
+[[rule]]
+id = "dev.pub-cache"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Cache Dart et Flutter"
+summary = "Paquets Dart téléchargés par `pub`, partagés par tous les projets Flutter."
+risk = 1
+loses = "Les paquets et les outils installés avec `dart pub global activate`."
+regenerate = "`flutter pub get` dans chaque projet, puis réinstaller les outils globaux."
+requires = ["flutter"]
+target = { kind = "command", program = "flutter", args = ["pub", "cache", "clean", "--force"], measure = ["~/.pub-cache"] }
+
+[[rule]]
+id = "dev.dart-server"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Cache de l'analyseur Dart"
+summary = "Index construit par l'analyseur Dart de votre éditeur."
+risk = 0
+loses = "Rien. L'éditeur réindexe les projets à leur prochaine ouverture."
+regenerate = "Automatique."
+target = { kind = "paths", paths = ["~/.dartServer"] }
+
+[[rule]]
+id = "dev.xcode-derived-data"
+profile = "developer"
+category = "developer"
+platforms = ["macos"]
+title = "Xcode DerivedData"
+summary = "Builds intermédiaires et index de chaque projet ouvert dans Xcode."
+risk = 0
+loses = "Le prochain build de chaque projet sera complet, donc plus long."
+regenerate = "Automatique au prochain build dans Xcode."
+group_by = "xcode_project"
+target = { kind = "paths", paths = ["~/Library/Developer/Xcode/DerivedData/*"] }
+
+[[rule]]
+id = "dev.ios-simulators"
+profile = "developer"
+category = "developer"
+platforms = ["macos"]
+title = "Simulateurs iOS"
+summary = "Appareils virtuels créés par Xcode, avec leurs apps et leurs données."
+risk = 1
+loses = "Les apps installées et les données de test de chaque simulateur supprimé."
+regenerate = "Xcode > Window > Devices and Simulators, ou `xcrun simctl create`."
+target = { kind = "provider", provider = "ios_simulators" }
+
+[[rule]]
+id = "dev.ios-runtimes"
+profile = "developer"
+category = "developer"
+platforms = ["macos"]
+title = "Images iOS des simulateurs"
+summary = "Versions d'iOS téléchargées pour faire tourner les simulateurs."
+risk = 1
+loses = "Les simulateurs de cette version d'iOS ne démarreront plus."
+regenerate = "Xcode > Settings > Components, retélécharger la version."
+target = { kind = "provider", provider = "ios_runtimes" }
+
+[[rule]]
+id = "dev.android-emulators"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Émulateurs Android"
+summary = "Appareils virtuels Android, avec leurs apps et leurs données."
+risk = 1
+loses = "Les apps installées et les données de test de chaque émulateur supprimé."
+regenerate = "Android Studio > Device Manager, recréer l'appareil."
+target = { kind = "provider", provider = "android_emulators" }
+
+[[rule]]
+id = "dev.android-system-images"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Images système Android"
+summary = "Versions d'Android téléchargées pour faire tourner les émulateurs."
+risk = 1
+loses = "Les émulateurs qui utilisent cette image ne démarreront plus."
+regenerate = "Android Studio > SDK Manager, retélécharger l'image."
+target = { kind = "provider", provider = "android_system_images" }
+
+[[rule]]
+id = "dev.android-ndk"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "NDK Android"
+summary = "Outils de compilation native Android, une installation par version."
+risk = 1
+loses = "Les projets qui utilisent cette version la retéléchargeront au prochain build."
+regenerate = "Automatique au prochain build du projet, ou Android Studio > SDK Manager."
+target = { kind = "provider", provider = "android_ndk" }
+
+[[rule]]
+id = "dev.docker-build-cache"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Cache de build Docker"
+summary = "Couches intermédiaires gardées par Docker pour accélérer les builds."
+risk = 0
+loses = "Le prochain `docker build` de chaque projet sera complet, donc plus long."
+regenerate = "Automatique au prochain build."
+requires = ["docker"]
+note = "Docker doit être lancé."
+target = { kind = "command", program = "docker", args = ["builder", "prune", "--all", "--force"] }
+
+[[rule]]
+id = "dev.docker-projects"
+profile = "developer"
+category = "developer"
+platforms = ["macos", "linux"]
+title = "Docker, projet par projet"
+summary = "Conteneurs, images, volumes et réseaux regroupés par projet Docker Compose."
+risk = 3
+loses = "Les volumes contiennent des données (bases locales, fichiers envoyés) qui ne se recréent pas."
+regenerate = "`docker compose up --build` dans le projet ; les données des volumes sont perdues."
+requires = ["docker"]
+note = "Docker doit être lancé. Les images partagées avec un autre projet ne sont jamais supprimées."
+target = { kind = "provider", provider = "docker_projects" }
