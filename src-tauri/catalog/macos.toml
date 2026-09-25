@@ -1,0 +1,114 @@
+# Grand public — macOS (SPEC section 5.1)
+#
+# Les chemins utilisent toujours `/`, et commencent par un jeton connu (`~`, `/Applications`…).
+# Les textes s'adressent à quelqu'un qui n'est pas développeur : pas de jargon.
+
+[[rule]]
+id = "macos.trash"
+profile = "general"
+category = "trash"
+platforms = ["macos"]
+title = "Corbeille"
+summary = "Fichiers que vous avez déjà mis à la corbeille."
+risk = 0
+loses = "Les fichiers de la corbeille ne pourront plus être récupérés."
+regenerate = "Rien à recréer."
+target = { kind = "paths", paths = ["~/.Trash/*"] }
+
+[[rule]]
+id = "macos.app-caches"
+profile = "general"
+category = "caches"
+platforms = ["macos"]
+title = "Caches des applications"
+summary = "Données temporaires que les applications gardent pour aller plus vite."
+risk = 0
+loses = "Rien. Certaines applications seront un peu plus lentes à leur prochain lancement."
+regenerate = "Automatique : chaque application recrée son cache quand elle en a besoin."
+group_by = "app"
+target = { kind = "paths", paths = ["~/Library/Caches/*"] }
+
+[[rule]]
+id = "macos.logs"
+profile = "general"
+category = "temporary"
+platforms = ["macos"]
+title = "Journaux des applications"
+summary = "Historiques techniques écrits par les applications, utiles seulement pour diagnostiquer une panne."
+risk = 0
+loses = "Les anciens journaux. Ils ne servent qu'en cas de panne à analyser."
+regenerate = "Automatique : les applications en écrivent de nouveaux."
+target = { kind = "paths", paths = ["~/Library/Logs/*"] }
+
+[[rule]]
+id = "macos.old-installers"
+profile = "general"
+category = "temporary"
+platforms = ["macos"]
+title = "Vieux installateurs"
+summary = "Fichiers d'installation déjà utilisés : images disque, paquets et installateurs de macOS."
+risk = 0
+loses = "Les fichiers d'installation. Les applications déjà installées ne sont pas touchées."
+regenerate = "Retélécharger l'installateur depuis le site de l'éditeur ou l'App Store si besoin."
+target = { kind = "paths", paths = ["~/Downloads/*.dmg", "~/Downloads/*.pkg", "/Applications/Install macOS*.app"] }
+
+[[rule]]
+id = "macos.large-files"
+profile = "general"
+category = "personal"
+platforms = ["macos"]
+title = "Gros fichiers et vidéos"
+summary = "Les plus gros fichiers de vos dossiers Téléchargements, Films et Bureau."
+risk = 2
+loses = "Les fichiers que vous cochez. Ce sont vos fichiers personnels : vérifiez chacun."
+regenerate = "Impossible, sauf si vous en avez une copie ailleurs."
+target = { kind = "provider", provider = "large_files" }
+
+[[rule]]
+id = "macos.duplicates"
+profile = "general"
+category = "personal"
+platforms = ["macos"]
+title = "Doublons"
+summary = "Fichiers présents en plusieurs exemplaires identiques dans vos dossiers."
+risk = 2
+loses = "Les copies que vous cochez. Une copie de chaque fichier est toujours gardée."
+regenerate = "Une copie reste en place."
+target = { kind = "provider", provider = "duplicates" }
+
+[[rule]]
+id = "macos.iphone-backups"
+profile = "general"
+category = "personal"
+platforms = ["macos"]
+title = "Sauvegardes d'iPhone et d'iPad"
+summary = "Copies complètes de vos appareils faites par le Finder. Elles sont souvent énormes."
+risk = 3
+loses = "La sauvegarde de l'appareil. Si c'est la seule copie de vos photos ou messages, ils seront perdus."
+regenerate = "Refaire une sauvegarde en branchant l'appareil au Mac, ou utiliser la sauvegarde iCloud."
+note = "Vérifiez que l'appareil est sauvegardé ailleurs (iCloud ou autre Mac) avant de supprimer."
+target = { kind = "provider", provider = "ios_backups" }
+
+[[rule]]
+id = "macos.messages-attachments"
+profile = "general"
+category = "personal"
+platforms = ["macos"]
+title = "Pièces jointes de Messages"
+summary = "Photos, vidéos et fichiers reçus ou envoyés dans l'app Messages."
+risk = 3
+loses = "Les photos et vidéos de vos conversations. Elles sont souvent irremplaçables."
+regenerate = "Impossible, sauf si Messages sur iCloud est activé."
+target = { kind = "paths", paths = ["~/Library/Messages/Attachments/*"] }
+
+[[rule]]
+id = "macos.mail-downloads"
+profile = "general"
+category = "temporary"
+platforms = ["macos"]
+title = "Pièces jointes ouvertes depuis Mail"
+summary = "Copies des pièces jointes que vous avez ouvertes dans Mail."
+risk = 1
+loses = "Les copies locales. Les pièces jointes restent dans vos e-mails."
+regenerate = "Mail les recrée quand vous rouvrez une pièce jointe."
+target = { kind = "paths", paths = ["~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads/*"] }

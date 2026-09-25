@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- Menu bar / tray icon: a 3×3 version of the grid, readable at 16 px.
+       Black on transparent: macOS uses it as a template image and recolours it. -->
+  <g fill="#000">
+    <rect x="3" y="3" width="5" height="5" rx="1.4"/>
+    <rect x="3" y="9.5" width="5" height="5" rx="1.4"/>
+    <rect x="9.5" y="9.5" width="5" height="5" rx="1.4"/>
+    <rect x="3" y="16" width="5" height="5" rx="1.4"/>
+    <rect x="9.5" y="16" width="5" height="5" rx="1.4"/>
+    <rect x="16" y="16" width="5" height="5" rx="1.4"/>
+  </g>
+  <g fill="none" stroke="#000" stroke-width="1">
+    <rect x="10" y="3.5" width="4" height="4" rx="1.1"/>
+    <rect x="16.5" y="3.5" width="4" height="4" rx="1.1"/>
+    <rect x="16.5" y="10" width="4" height="4" rx="1.1"/>
+  </g>
+</svg>
