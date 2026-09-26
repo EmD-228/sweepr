@@ -32,9 +32,9 @@ jobs:
     name: check
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -54,7 +54,7 @@ jobs:
     needs: check
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The tag must match the version the app reports, or the release would lie about itself.
       - run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -64,8 +64,8 @@ jobs:
             echo "Tag $GITHUB_REF_NAME, package.json $npm_version, Cargo.toml $cargo_version: they must match." >&2
             exit 1
           fi
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -95,7 +95,7 @@ jobs:
           done
       # One universal build that runs on Apple silicon and Intel Macs.
       - run: pnpm tauri build --target universal-apple-darwin --bundles dmg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sweepr-macos
           path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
@@ -108,14 +108,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: sweepr-*
           merge-multiple: true
           path: dist
       - run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       # A draft: the maintainer reads the notes, then publishes it by hand.
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: Sweepr ${{ github.ref_name }}
           draft: true
