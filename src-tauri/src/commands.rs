@@ -126,7 +126,11 @@ fn run_scan(app: &AppHandle) {
         free_space: disk.map(|d| d.free),
         total_space: disk.map(|d| d.total),
         rules: rules.iter().map(|r| (*r).clone()).collect(),
-        ecosystem_names: catalog.ecosystems.iter().map(|e| (e.id.clone(), e.name.clone())).collect(),
+        ecosystem_names: catalog
+            .ecosystems
+            .iter()
+            .map(|e| (e.id.clone(), e.name.clone()))
+            .collect(),
         items: scan::rule_items(env, &rules, namer, &seen, cancel),
         projects: Vec::new(),
         full_disk_access: platform::full_disk_access(env.home()),
@@ -221,16 +225,33 @@ fn run_execution(app: &AppHandle, items: &[Item], busy: BusyGuard) {
 
     // Cleaned items leave the result, so they cannot be run twice. The interface gets the
     // updated result like after a scan.
-    let done: HashSet<&str> = reports.iter().filter(|r| r.status == Status::Done).map(|r| r.id.as_str()).collect();
+    let done: HashSet<&str> = reports
+        .iter()
+        .filter(|r| r.status == Status::Done)
+        .map(|r| r.id.as_str())
+        .collect();
     let updated = state.result.lock().ok().and_then(|mut guard| {
         let result = guard.as_mut()?;
         result.items.retain(|i| !done.contains(i.id.as_str()));
         Some(result.clone())
     });
     if let Some(result) = updated {
-        let _ = app.emit("scan:update", ScanUpdate { phase: ScanPhase::Done, result: &result });
+        let _ = app.emit(
+            "scan:update",
+            ScanUpdate {
+                phase: ScanPhase::Done,
+                result: &result,
+            },
+        );
     }
-    let _ = app.emit("exec:finished", ExecFinished { reports, estimate, trashed });
+    let _ = app.emit(
+        "exec:finished",
+        ExecFinished {
+            reports,
+            estimate,
+            trashed,
+        },
+    );
     // Measuring can take minutes: a new scan may start meanwhile.
     drop(busy);
 

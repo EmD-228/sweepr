@@ -17,7 +17,8 @@ pub fn disk_space(path: &Path) -> io::Result<DiskSpace> {
     use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
 
-    let c_path = CString::new(path.as_os_str().as_bytes()).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+    let c_path =
+        CString::new(path.as_os_str().as_bytes()).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
     let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
     // SAFETY: `c_path` is a valid NUL-terminated string and `stat` a valid out pointer.
     let result = unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) };
@@ -27,7 +28,10 @@ pub fn disk_space(path: &Path) -> io::Result<DiskSpace> {
     #[allow(clippy::unnecessary_cast)]
     let block = stat.f_frsize as u64;
     #[allow(clippy::unnecessary_cast)]
-    Ok(DiskSpace { total: stat.f_blocks as u64 * block, free: stat.f_bavail as u64 * block })
+    Ok(DiskSpace {
+        total: stat.f_blocks as u64 * block,
+        free: stat.f_bavail as u64 * block,
+    })
 }
 
 /// Capacity and free space of the volume holding `path`, in bytes.

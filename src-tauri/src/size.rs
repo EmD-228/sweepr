@@ -67,7 +67,10 @@ pub fn usage(path: &Path, seen: &Seen, cancel: &AtomicBool) -> Usage {
             let device = device_of(&meta);
             walk(path, &meta, device, seen, cancel)
         }
-        Err(_) => Usage { unreadable: 1, ..Usage::default() },
+        Err(_) => Usage {
+            unreadable: 1,
+            ..Usage::default()
+        },
     }
 }
 
@@ -75,7 +78,10 @@ fn walk(path: &Path, meta: &Metadata, device: u64, seen: &Seen, cancel: &AtomicB
     if !meta.is_dir() {
         return file_usage(meta, seen);
     }
-    let mut total = Usage { allocated: allocated_of(meta), ..Usage::default() };
+    let mut total = Usage {
+        allocated: allocated_of(meta),
+        ..Usage::default()
+    };
     if cancel.load(Ordering::Relaxed) {
         return total;
     }
@@ -90,13 +96,19 @@ fn walk(path: &Path, meta: &Metadata, device: u64, seen: &Seen, cancel: &AtomicB
         .into_par_iter()
         .map(|entry| {
             let Ok(entry) = entry else {
-                return Usage { unreadable: 1, ..Usage::default() };
+                return Usage {
+                    unreadable: 1,
+                    ..Usage::default()
+                };
             };
             let child = entry.path();
             match child.symlink_metadata() {
                 Ok(meta) if meta.is_dir() && device_of(&meta) != device => Usage::default(),
                 Ok(meta) => walk(&child, &meta, device, seen, cancel),
-                Err(_) => Usage { unreadable: 1, ..Usage::default() },
+                Err(_) => Usage {
+                    unreadable: 1,
+                    ..Usage::default()
+                },
             }
         })
         .reduce(Usage::default, |a, b| a + b);
@@ -110,7 +122,12 @@ fn file_usage(meta: &Metadata, seen: &Seen) -> Usage {
             return Usage::default();
         }
     }
-    Usage { allocated: allocated_of(meta), apparent: meta.len(), files: 1, unreadable: 0 }
+    Usage {
+        allocated: allocated_of(meta),
+        apparent: meta.len(),
+        files: 1,
+        unreadable: 0,
+    }
 }
 
 #[cfg(unix)]
@@ -199,6 +216,12 @@ mod tests {
     #[test]
     fn missing_path_is_unreadable() {
         let usage = usage(Path::new("/definitely/not/here"), &Seen::default(), &no_cancel());
-        assert_eq!(usage, Usage { unreadable: 1, ..Usage::default() });
+        assert_eq!(
+            usage,
+            Usage {
+                unreadable: 1,
+                ..Usage::default()
+            }
+        );
     }
 }
