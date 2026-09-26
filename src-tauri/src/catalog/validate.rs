@@ -8,7 +8,9 @@ use crate::paths::validate_pattern;
 
 /// Characters that mean something to a shell. Commands never go through a shell,
 /// but a catalog entry containing them is almost certainly a mistake.
-const SHELL_METACHARACTERS: &[char] = &[';', '|', '&', '$', '`', '<', '>', '(', ')', '\n', '\r', '"', '\'', '*', '?'];
+const SHELL_METACHARACTERS: &[char] = &[
+    ';', '|', '&', '$', '`', '<', '>', '(', ')', '\n', '\r', '"', '\'', '*', '?',
+];
 
 /// Artifact names that must never be deleted from a project, whatever an ecosystem says.
 const PROTECTED_ARTIFACTS: &[&str] = &[".git", ".env", "src", "lib", "app", "ios", "android"];
@@ -21,13 +23,21 @@ pub fn validate_files(files: &[(&str, &CatalogFile)]) -> Vec<String> {
             if !ids.insert(rule.id.clone()) {
                 errors.push(format!("{name}: duplicate id `{}`", rule.id));
             }
-            errors.extend(validate_rule(rule).into_iter().map(|e| format!("{name}: rule `{}`: {e}", rule.id)));
+            errors.extend(
+                validate_rule(rule)
+                    .into_iter()
+                    .map(|e| format!("{name}: rule `{}`: {e}", rule.id)),
+            );
         }
         for eco in &file.ecosystem {
             if !ids.insert(eco.id.clone()) {
                 errors.push(format!("{name}: duplicate id `{}`", eco.id));
             }
-            errors.extend(validate_ecosystem(eco).into_iter().map(|e| format!("{name}: ecosystem `{}`: {e}", eco.id)));
+            errors.extend(
+                validate_ecosystem(eco)
+                    .into_iter()
+                    .map(|e| format!("{name}: ecosystem `{}`: {e}", eco.id)),
+            );
         }
     }
     errors
@@ -64,7 +74,13 @@ fn validate_rule(rule: &Rule) -> Vec<String> {
             }
         }
         Target::Command { program, args, measure } => {
-            check_argv(&Argv { program: program.clone(), args: args.clone() }, &mut errors);
+            check_argv(
+                &Argv {
+                    program: program.clone(),
+                    args: args.clone(),
+                },
+                &mut errors,
+            );
             for pattern in measure {
                 if let Err(e) = validate_pattern(pattern) {
                     errors.push(e.to_string());
@@ -112,9 +128,9 @@ fn validate_ecosystem(eco: &Ecosystem) -> Vec<String> {
 
 fn check_id(id: &str, errors: &mut Vec<String>) {
     let valid = !id.is_empty()
-        && id.split(['.', '-']).all(|part| {
-            !part.is_empty() && part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        });
+        && id
+            .split(['.', '-'])
+            .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
     if !valid {
         errors.push(format!("id `{id}` must be lowercase words separated by `.` or `-`"));
     }
@@ -122,7 +138,9 @@ fn check_id(id: &str, errors: &mut Vec<String>) {
 
 fn check_program(program: &str, errors: &mut Vec<String>) {
     let valid = !program.is_empty()
-        && program.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        && program
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
         && !program.starts_with(['.', '-']);
     if !valid {
         errors.push(format!("program `{program}` must be a bare program name"));
@@ -133,7 +151,10 @@ fn check_argv(argv: &Argv, errors: &mut Vec<String>) {
     check_program(&argv.program, errors);
     for arg in &argv.args {
         if arg.is_empty() || arg.contains(SHELL_METACHARACTERS) {
-            errors.push(format!("argument `{arg}` of `{}` is empty or contains shell characters", argv.program));
+            errors.push(format!(
+                "argument `{arg}` of `{}` is empty or contains shell characters",
+                argv.program
+            ));
         }
     }
 }
@@ -182,12 +203,10 @@ mod tests {
 
     #[test]
     fn rejects_shell_characters_in_commands() {
-        let file = parse(
-            &RULE.replace(
-                r#"target = { kind = "paths", paths = ["~/.Trash/*"] }"#,
-                r#"target = { kind = "command", program = "npm", args = ["cache", "clean; rm -rf ~"] }"#,
-            ),
-        );
+        let file = parse(&RULE.replace(
+            r#"target = { kind = "paths", paths = ["~/.Trash/*"] }"#,
+            r#"target = { kind = "command", program = "npm", args = ["cache", "clean; rm -rf ~"] }"#,
+        ));
         let errors = validate_files(&[("t", &file)]);
         assert!(errors.iter().any(|e| e.contains("shell characters")), "{errors:?}");
 
@@ -195,7 +214,9 @@ mod tests {
             r#"target = { kind = "paths", paths = ["~/.Trash/*"] }"#,
             r#"target = { kind = "command", program = "/bin/rm", args = ["-rf"] }"#,
         ));
-        assert!(validate_files(&[("t", &file)]).iter().any(|e| e.contains("bare program name")));
+        assert!(validate_files(&[("t", &file)])
+            .iter()
+            .any(|e| e.contains("bare program name")));
     }
 
     #[test]

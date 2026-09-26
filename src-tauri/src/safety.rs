@@ -81,8 +81,15 @@ impl SafetyPolicy {
     /// Deletions allowed under `home` only.
     pub fn new(home: impl Into<PathBuf>) -> Self {
         let home = home.into();
-        let mut policy = SafetyPolicy { roots: Vec::new(), protected: HashSet::new() };
-        for path in PROTECTED_ABSOLUTE.iter().map(PathBuf::from).chain(PROTECTED_IN_HOME.iter().map(|p| home.join(p))) {
+        let mut policy = SafetyPolicy {
+            roots: Vec::new(),
+            protected: HashSet::new(),
+        };
+        for path in PROTECTED_ABSOLUTE
+            .iter()
+            .map(PathBuf::from)
+            .chain(PROTECTED_IN_HOME.iter().map(|p| home.join(p)))
+        {
             policy.protect(&path);
         }
         policy.allow_root(home)
@@ -109,7 +116,10 @@ impl SafetyPolicy {
         if !path.is_absolute() {
             return Err(SafetyError::NotAbsolute(path.to_path_buf()));
         }
-        if path.components().any(|c| matches!(c, Component::CurDir | Component::ParentDir)) {
+        if path
+            .components()
+            .any(|c| matches!(c, Component::CurDir | Component::ParentDir))
+        {
             return Err(SafetyError::NotNormalized(path.to_path_buf()));
         }
         if path.symlink_metadata().is_err() {
@@ -118,7 +128,9 @@ impl SafetyPolicy {
         let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
             return Err(SafetyError::Protected(path.to_path_buf()));
         };
-        let real_parent = parent.canonicalize().map_err(|_| SafetyError::Missing(path.to_path_buf()))?;
+        let real_parent = parent
+            .canonicalize()
+            .map_err(|_| SafetyError::Missing(path.to_path_buf()))?;
         let real = real_parent.join(name);
 
         if Path::new(name).to_string_lossy().starts_with(".env") {
@@ -179,22 +191,39 @@ mod tests {
     fn accepts_paths_inside_home() {
         let (_dir, home, policy) = setup();
         assert!(policy.check_deletable(&home.join("Library/Caches/app")).is_ok());
-        assert!(policy.check_deletable(&home.join("Documents/project/node_modules")).is_ok());
+        assert!(policy
+            .check_deletable(&home.join("Documents/project/node_modules"))
+            .is_ok());
     }
 
     #[test]
     fn refuses_protected_and_outside_paths() {
         let (dir, home, policy) = setup();
         assert!(matches!(policy.check_deletable(&home), Err(SafetyError::Protected(_))));
-        assert!(matches!(policy.check_deletable(&home.join("Documents")), Err(SafetyError::Protected(_))));
-        assert!(matches!(policy.check_deletable(&home.join("Library/Caches")), Err(SafetyError::Protected(_))));
-        assert!(matches!(policy.check_deletable(&home.join("Documents/project/.env")), Err(SafetyError::EnvFile(_))));
-        assert!(matches!(policy.check_deletable(Path::new("relative")), Err(SafetyError::NotAbsolute(_))));
+        assert!(matches!(
+            policy.check_deletable(&home.join("Documents")),
+            Err(SafetyError::Protected(_))
+        ));
+        assert!(matches!(
+            policy.check_deletable(&home.join("Library/Caches")),
+            Err(SafetyError::Protected(_))
+        ));
+        assert!(matches!(
+            policy.check_deletable(&home.join("Documents/project/.env")),
+            Err(SafetyError::EnvFile(_))
+        ));
+        assert!(matches!(
+            policy.check_deletable(Path::new("relative")),
+            Err(SafetyError::NotAbsolute(_))
+        ));
         assert!(matches!(
             policy.check_deletable(&home.join("Documents/project/../project")),
             Err(SafetyError::NotNormalized(_))
         ));
-        assert!(matches!(policy.check_deletable(&home.join("nope")), Err(SafetyError::Missing(_))));
+        assert!(matches!(
+            policy.check_deletable(&home.join("nope")),
+            Err(SafetyError::Missing(_))
+        ));
         fs::create_dir(dir.path().join("elsewhere")).unwrap();
         assert!(matches!(
             policy.check_deletable(&dir.path().canonicalize().unwrap().join("elsewhere")),
@@ -212,7 +241,10 @@ mod tests {
 
         // Through the link, `precious` really lives outside home.
         let through_link = home.join("Library/Caches/link/precious");
-        assert!(matches!(policy.check_deletable(&through_link), Err(SafetyError::OutsideRoots(_))));
+        assert!(matches!(
+            policy.check_deletable(&through_link),
+            Err(SafetyError::OutsideRoots(_))
+        ));
 
         // The link itself may be removed, and removing it leaves the target alone.
         let link = home.join("Library/Caches/link");

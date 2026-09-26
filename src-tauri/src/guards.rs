@@ -64,7 +64,9 @@ fn git(args: &[&str], cwd: &Path) -> Result<String, String> {
 
 /// Root of the repository containing `dir`, if any.
 pub fn repo_root(dir: &Path) -> Option<PathBuf> {
-    git(&["rev-parse", "--show-toplevel"], dir).ok().map(|s| PathBuf::from(s.trim()))
+    git(&["rev-parse", "--show-toplevel"], dir)
+        .ok()
+        .map(|s| PathBuf::from(s.trim()))
 }
 
 /// Number of files git tracks inside `target`, asked from its parent folder so the
@@ -120,8 +122,16 @@ pub fn repo_status(root: &Path) -> Result<RepoStatus, String> {
     let unpushed = git(&["log", "--branches", "--not", "--remotes", "--format=%H"], root)
         .map(|s| s.lines().count())
         .unwrap_or(0);
-    let last_commit = git(&["log", "-1", "--format=%ct"], root).ok().and_then(|s| s.trim().parse().ok());
-    Ok(RepoStatus { root: root.to_path_buf(), changes, unpushed, has_remote, last_commit })
+    let last_commit = git(&["log", "-1", "--format=%ct"], root)
+        .ok()
+        .and_then(|s| s.trim().parse().ok());
+    Ok(RepoStatus {
+        root: root.to_path_buf(),
+        changes,
+        unpushed,
+        has_remote,
+        last_commit,
+    })
 }
 
 #[cfg(test)]
@@ -129,10 +139,21 @@ mod tests {
     use super::*;
 
     fn git_in(dir: &Path, args: &[&str]) {
-        let mut full = vec!["-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false"];
+        let mut full = vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "commit.gpgsign=false",
+        ];
         full.extend_from_slice(args);
         let output = process::run("git", &full, dir, GIT_TIMEOUT).unwrap();
-        assert!(output.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     /// A repository with a clean project, an ignored `node_modules` and a `build` folder
@@ -158,7 +179,10 @@ mod tests {
         let dir = fixture();
         let root = dir.path().join("my project");
         assert_eq!(check_artifact(&root.join("node_modules")), Ok(()));
-        assert_eq!(check_artifact(&root.join("build")), Err(Blocked::TrackedFiles { count: 1 }));
+        assert_eq!(
+            check_artifact(&root.join("build")),
+            Err(Blocked::TrackedFiles { count: 1 })
+        );
     }
 
     #[test]
@@ -173,10 +197,16 @@ mod tests {
         let dir = fixture();
         let root = dir.path().join("my project");
         fs::write(root.join("build/.env.local"), "SECRET=1").unwrap();
-        assert!(matches!(check_artifact(&root.join("build")), Err(Blocked::EnvFile { .. })));
+        assert!(matches!(
+            check_artifact(&root.join("build")),
+            Err(Blocked::EnvFile { .. })
+        ));
 
         fs::create_dir_all(root.join("node_modules/.git")).unwrap();
-        assert_eq!(check_artifact(&root.join("node_modules")), Err(Blocked::ContainsRepository));
+        assert_eq!(
+            check_artifact(&root.join("node_modules")),
+            Err(Blocked::ContainsRepository)
+        );
     }
 
     #[test]
