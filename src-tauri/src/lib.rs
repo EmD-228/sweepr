@@ -1,6 +1,7 @@
 pub mod catalog;
 mod commands;
 pub mod exec;
+pub mod files;
 pub mod guards;
 pub mod measure;
 pub mod names;

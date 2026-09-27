@@ -11,3 +11,4 @@ All notable changes to Sweepr are listed here. The format follows [Keep a Change
 - Projects sorted into active and inactive, with git checks that keep tracked files, `.env` files and nested repositories.
 - Simulation of every cleanup, confirmation by risk level, and measurement of the space really recovered.
 - Storage overview with charts, menu bar icon.
+- Large files in Downloads, Movies and Desktop, and duplicates in the user's folders. One copy of each duplicate is kept and compared byte for byte with the others right before they are deleted. Copies made in the Finder share their space with the original and are not offered, since deleting them frees nothing.

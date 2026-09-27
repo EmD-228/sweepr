@@ -77,7 +77,8 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScanPhase {
-    /// Caches, trash, installers and developer tools are listed.
+    /// Caches, trash, installers and developer tools are listed. Published a second time
+    /// with large files and duplicates.
     Overview,
     /// Projects are listed with their artifacts.
     Projects,
@@ -139,6 +140,14 @@ fn run_scan(app: &AppHandle) {
         return publish(app, &state, ScanPhase::Cancelled, &result);
     }
     publish(app, &state, ScanPhase::Overview, &result);
+
+    // Large files and duplicates read the user's folders, and duplicates read file contents:
+    // slower, so they come after the first overview.
+    let files = scan::file_items(env, &rules, &catalog.ecosystems, &result.items, cancel);
+    result.items.extend(files);
+    if cancel.load(Ordering::Relaxed) {
+        return publish(app, &state, ScanPhase::Cancelled, &result);
+    }
     if !developer {
         return publish(app, &state, ScanPhase::Done, &result);
     }

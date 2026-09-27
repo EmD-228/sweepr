@@ -4,13 +4,14 @@
 //! paths. The interface only ever sends item ids back: it can never name a path or a command.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use rayon::prelude::*;
 use serde::Serialize;
 
-use crate::catalog::{Catalog, Ecosystem, GroupBy, Os, Profile, Risk, Rule, Target};
+use crate::catalog::{Catalog, Ecosystem, GroupBy, Os, Profile, ProviderId, Risk, Rule, Target};
+use crate::files;
 use crate::guards;
 use crate::names::Namer;
 use crate::paths::PathEnv;
@@ -28,6 +29,18 @@ pub enum Disposal {
     Trash,
 }
 
+impl Disposal {
+    /// Data that may not come back (risk 2 and 3) goes to the trash: this is the only place
+    /// that decides it.
+    fn for_risk(risk: Risk) -> Disposal {
+        if risk >= Risk::Review {
+            Disposal::Trash
+        } else {
+            Disposal::Delete
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Delete {
@@ -35,8 +48,7 @@ pub enum Action {
         disposal: Disposal,
         /// Folders outside home that the rule may clean in (for example `/Applications`).
         extra_roots: Vec<PathBuf>,
-        /// Run the project guards (tracked files, `.env`, nested repository) before deleting.
-        project_guards: bool,
+        guard: Guard,
     },
     Command {
         program: String,
@@ -44,20 +56,25 @@ pub enum Action {
     },
 }
 
+/// Check run on each path right before it is deleted, on top of the safety policy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Guard {
+    None,
+    /// Project artifacts: tracked files, `.env` files and nested repositories block deletion.
+    Project,
+    /// Duplicates: the copy kept must still be there with the same content, compared byte
+    /// for byte.
+    SameContentAs(PathBuf),
+}
+
 impl Action {
-    /// Deletion of `paths`. Data that may not come back (risk 2 and 3) goes to the trash:
-    /// this is the only place that decides it.
-    pub fn delete(paths: Vec<PathBuf>, risk: Risk, extra_roots: Vec<PathBuf>, project_guards: bool) -> Action {
-        let disposal = if risk >= Risk::Review {
-            Disposal::Trash
-        } else {
-            Disposal::Delete
-        };
+    /// Deletion of `paths`, to the trash or for good depending on `risk`.
+    pub fn delete(paths: Vec<PathBuf>, risk: Risk, extra_roots: Vec<PathBuf>, guard: Guard) -> Action {
         Action::Delete {
             paths,
-            disposal,
+            disposal: Disposal::for_risk(risk),
             extra_roots,
-            project_guards,
+            guard,
         }
     }
 
@@ -143,7 +160,7 @@ fn rule_paths(env: &PathEnv, rule: &Rule) -> Vec<PathBuf> {
 }
 
 /// Builds the items of every `paths` and `command` rule in `rules`.
-/// Provider rules are handled by `providers`.
+/// Provider rules are handled by their own functions ([`file_items`]).
 pub fn rule_items(env: &PathEnv, rules: &[&Rule], namer: &Namer, seen: &Seen, cancel: &AtomicBool) -> Vec<Item> {
     // Developer rules claim their folders first, so `~/Library/Caches/Yarn` shows as
     // "Cache Yarn" and not a second time among application caches.
@@ -207,7 +224,7 @@ fn items_for_rule(
                 size: size::total_allocated(&paths, seen, cancel),
                 size_known: true,
                 blocked: None,
-                action: Action::delete(paths, rule.risk, extra_roots.clone(), false),
+                action: Action::delete(paths, rule.risk, extra_roots.clone(), Guard::None),
             };
             match rule.group_by {
                 GroupBy::App | GroupBy::XcodeProject => {
@@ -267,6 +284,75 @@ fn items_for_rule(
         }
         Target::Provider { .. } => Vec::new(),
     }
+}
+
+/// Items of the large files and duplicates rules, from one walk of the user's folders.
+/// Files already in another item (old installers in Downloads) are left to that item, and a
+/// copy listed as a duplicate is not listed again as a large file.
+pub fn file_items(
+    env: &PathEnv,
+    rules: &[&Rule],
+    ecosystems: &[Ecosystem],
+    taken: &[Item],
+    cancel: &AtomicBool,
+) -> Vec<Item> {
+    let rule_for = |id: ProviderId| {
+        rules
+            .iter()
+            .find(|r| matches!(&r.target, Target::Provider { provider } if *provider == id))
+    };
+    let (large_rule, duplicates_rule) = (rule_for(ProviderId::LargeFiles), rule_for(ProviderId::Duplicates));
+    if large_rule.is_none() && duplicates_rule.is_none() {
+        return Vec::new();
+    }
+    // Paths of the other items, looked up through each file's parent folders.
+    let claimed: HashSet<&Path> = taken
+        .iter()
+        .flat_map(|item| match &item.action {
+            Action::Delete { paths, .. } => paths.as_slice(),
+            Action::Command { .. } => &[],
+        })
+        .map(PathBuf::as_path)
+        .collect();
+    let mut found = files::collect(env.home(), ecosystems, cancel);
+    found.retain(|f| !f.path.ancestors().any(|a| claimed.contains(a)));
+
+    let make = |rule: &Rule, path: &Path, detail: String, size: u64, action: Action| Item {
+        id: format!("{}:{}", rule.id, path.display()),
+        rule: rule.id.clone(),
+        title: path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string()),
+        detail: Some(detail),
+        project: None,
+        risk: rule.risk,
+        size,
+        size_known: true,
+        blocked: None,
+        action,
+    };
+    let mut items = Vec::new();
+    let mut copies: HashSet<&Path> = HashSet::new();
+    if let Some(rule) = duplicates_rule {
+        for group in files::duplicates(&found, cancel) {
+            copies.extend(group.copies.iter().map(|c| c.path.as_path()));
+            let original = &group.original.path;
+            let count = group.copies.len();
+            let detail = format!("{count} copie{} · garde {}", plural(count), original.display());
+            let paths = group.copies.iter().map(|c| c.path.clone()).collect();
+            let guard = Guard::SameContentAs(original.clone());
+            let action = Action::delete(paths, rule.risk, Vec::new(), guard);
+            items.push(make(rule, original, detail, group.freed, action));
+        }
+    }
+    if let Some(rule) = large_rule {
+        for (file, freed) in files::large_files(&found, &copies) {
+            let action = Action::delete(vec![file.path.clone()], rule.risk, Vec::new(), Guard::None);
+            items.push(make(rule, &file.path, file.path.display().to_string(), freed, action));
+        }
+    }
+    items
 }
 
 /// Folders searched for projects: the home folder, without system and media folders.
@@ -333,7 +419,7 @@ pub fn project_items(projects: &[Project], ecosystems: &[Ecosystem]) -> Vec<Item
                     size: artifact.usage.allocated,
                     size_known: true,
                     blocked: None,
-                    action: Action::delete(vec![artifact.path.clone()], risk, Vec::new(), true),
+                    action: Action::delete(vec![artifact.path.clone()], risk, Vec::new(), Guard::Project),
                 }
             })
         })
@@ -347,7 +433,7 @@ pub fn apply_project_guards(items: &mut [Item]) {
     items.par_iter_mut().for_each(|item| {
         if let Action::Delete {
             paths,
-            project_guards: true,
+            guard: Guard::Project,
             ..
         } = &item.action
         {
@@ -477,6 +563,38 @@ mod tests {
         assert!(items
             .iter()
             .all(|i| catalog.rule(&i.rule).unwrap().profile == Profile::General));
+    }
+
+    #[test]
+    fn duplicates_leave_files_of_other_items_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().canonicalize().unwrap();
+        for (path, seed) in [
+            ("Downloads/setup.dmg", 1),
+            ("Desktop/setup.dmg", 1),
+            ("Downloads/photos.zip", 2),
+            ("Documents/photos.zip", 2),
+        ] {
+            let data: Vec<u8> = (0..1_500_000u32).map(|i| (i % 253) as u8 ^ seed).collect();
+            fs::create_dir_all(home.join(path).parent().unwrap()).unwrap();
+            fs::write(home.join(path), data).unwrap();
+        }
+        let env = PathEnv::new(&home);
+        let catalog = Catalog::embedded().unwrap();
+        let cancel = AtomicBool::new(false);
+        let rules = active_rules(&catalog, Os::Macos, false);
+        let items = rule_items(&env, &rules, &Namer::default(), &Seen::default(), &cancel);
+
+        let files = file_items(&env, &rules, &catalog.ecosystems, &items, &cancel);
+        assert_eq!(files.len(), 1, "the installer in Downloads is already an item");
+        let duplicate = &files[0];
+        assert_eq!(duplicate.rule, "macos.duplicates");
+        assert_eq!(duplicate.title, "photos.zip");
+        assert_eq!(duplicate.action.disposal(), Some(Disposal::Trash));
+        assert_eq!(
+            duplicate.action.describe(),
+            vec![home.join("Downloads/photos.zip").display().to_string()]
+        );
     }
 
     #[test]

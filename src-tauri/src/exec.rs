@@ -8,10 +8,11 @@ use std::time::Duration;
 
 use serde::Serialize;
 
+use crate::files;
 use crate::guards;
 use crate::process;
 use crate::safety::{self, SafetyError, SafetyPolicy};
-use crate::scan::{describe_blocked, Action, Disposal, Item};
+use crate::scan::{describe_blocked, Action, Disposal, Guard, Item};
 
 /// Official commands may be slow (Docker, Flutter), but never hang forever.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15 * 60);
@@ -48,22 +49,31 @@ pub struct Preview {
 }
 
 /// Resolves `path` if it may be deleted now, or says why it is skipped.
-fn check(path: &Path, policy: &SafetyPolicy, project_guards: bool) -> Result<PathBuf, String> {
+fn check(path: &Path, policy: &SafetyPolicy, guard: &Guard) -> Result<PathBuf, String> {
     let real = policy.check_deletable(path).map_err(|e| match e {
         SafetyError::Missing(_) => format!("{} : déjà supprimé.", path.display()),
         e => format!("{} : refusé par sécurité ({e}).", path.display()),
     })?;
-    if project_guards {
-        if !guards::git_available() {
-            return Err(format!(
-                "{} : git n'est pas disponible pour vérifier le projet.",
-                path.display()
-            ));
-        }
-        guards::check_artifact(path)
-            .map_err(|blocked| format!("{} : {}", path.display(), describe_blocked(&blocked)))?;
+    let refused = match guard {
+        Guard::None => None,
+        Guard::Project if !guards::git_available() => Some("git n'est pas disponible pour vérifier le projet.".into()),
+        Guard::Project => guards::check_artifact(path).err().map(|b| describe_blocked(&b)),
+        Guard::SameContentAs(original) => match files::same_content(original, &real) {
+            Ok(true) => None,
+            Ok(false) => Some(format!(
+                "n'est plus une copie identique de {}, gardé.",
+                original.display()
+            )),
+            Err(_) => Some(format!(
+                "l'exemplaire à garder ({}) est introuvable, gardé.",
+                original.display()
+            )),
+        },
+    };
+    match refused {
+        Some(reason) => Err(format!("{} : {reason}", path.display())),
+        None => Ok(real),
     }
-    Ok(real)
 }
 
 fn policy_for(home: &Path, extra_roots: &[PathBuf]) -> SafetyPolicy {
@@ -83,12 +93,12 @@ pub fn preview(item: &Item, home: &Path) -> Preview {
         Action::Delete {
             paths,
             extra_roots,
-            project_guards,
+            guard,
             ..
         } => {
             let policy = policy_for(home, extra_roots);
             for path in paths {
-                match check(path, &policy, *project_guards) {
+                match check(path, &policy, guard) {
                     Ok(real) => preview.actions.push(real.display().to_string()),
                     Err(reason) => preview.skipped.push(reason),
                 }
@@ -113,7 +123,7 @@ pub fn execute(item: &Item, home: &Path) -> Report {
             paths,
             disposal,
             extra_roots,
-            project_guards,
+            guard,
         } => {
             let mut cleaned = 0;
             let mut skipped = 0;
@@ -121,7 +131,7 @@ pub fn execute(item: &Item, home: &Path) -> Report {
             let mut messages = Vec::new();
             let policy = policy_for(home, extra_roots);
             for path in paths {
-                let real = match check(path, &policy, *project_guards) {
+                let real = match check(path, &policy, guard) {
                     Ok(real) => real,
                     Err(reason) => {
                         skipped += 1;
@@ -216,7 +226,8 @@ mod tests {
     use crate::catalog::Risk;
     use std::fs;
 
-    fn delete_item(paths: Vec<PathBuf>, project_guards: bool) -> Item {
+    /// Risk 0 deletes for good, so the tests do not fill the real trash.
+    fn delete_item(paths: Vec<PathBuf>, guard: Guard) -> Item {
         Item {
             id: "test".into(),
             rule: "test".into(),
@@ -227,7 +238,7 @@ mod tests {
             size: 0,
             size_known: true,
             blocked: None,
-            action: Action::delete(paths, Risk::None, Vec::new(), project_guards),
+            action: Action::delete(paths, Risk::None, Vec::new(), guard),
         }
     }
 
@@ -240,7 +251,7 @@ mod tests {
         fs::write(cache.join("f"), "x").unwrap();
         let item = delete_item(
             vec![cache.clone(), home.join("Documents"), home.join("Library/Caches/gone")],
-            false,
+            Guard::None,
         );
 
         let preview = preview(&item, &home);
@@ -256,10 +267,41 @@ mod tests {
     }
 
     #[test]
+    fn a_duplicate_is_deleted_only_while_its_original_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().canonicalize().unwrap();
+        let original = home.join("Documents/clip.mov");
+        let copy = home.join("Downloads/clip.mov");
+        let changed = home.join("Desktop/clip.mov");
+        for path in [&original, &copy, &changed] {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, "same video").unwrap();
+        }
+        fs::write(&changed, "edited video").unwrap();
+        let item = delete_item(
+            vec![copy.clone(), changed.clone()],
+            Guard::SameContentAs(original.clone()),
+        );
+
+        let report = execute(&item, &home);
+        assert_eq!(report.status, Status::Partial);
+        assert!(!copy.exists());
+        assert!(changed.exists(), "a file that no longer matches is kept");
+        assert!(original.exists());
+
+        fs::write(&copy, "same video").unwrap();
+        fs::remove_file(&original).unwrap();
+        let item = delete_item(vec![copy.clone()], Guard::SameContentAs(original));
+        let report = execute(&item, &home);
+        assert_eq!(report.status, Status::Skipped);
+        assert!(copy.exists(), "without the original, the last copy stays");
+    }
+
+    #[test]
     fn blocked_items_are_skipped() {
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().canonicalize().unwrap();
-        let mut item = delete_item(vec![home.join("x")], false);
+        let mut item = delete_item(vec![home.join("x")], Guard::None);
         item.blocked = Some("raison".into());
         let report = execute(&item, &home);
         assert_eq!(report.status, Status::Skipped);
