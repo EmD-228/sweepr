@@ -142,7 +142,9 @@ pub fn is_tool_install(dir: &Path) -> bool {
 /// Finds the project roots below `roots`. Hidden folders and dependency folders are skipped.
 pub fn find_roots(roots: &[PathBuf], ecosystems: &[Ecosystem], cancel: &AtomicBool) -> Vec<PathBuf> {
     let found = Mutex::new(Vec::new());
-    roots.par_iter().for_each(|root| visit(root, 0, ecosystems, cancel, &found));
+    roots
+        .par_iter()
+        .for_each(|root| visit(root, 0, ecosystems, cancel, &found));
     let mut found = found.into_inner().unwrap_or_default();
     found.sort();
     found.dedup();
@@ -226,10 +228,19 @@ pub fn analyze(root: &Path, ecosystems: &[Ecosystem], seen: &Seen, cancel: &Atom
     let node_version = node_version(root);
     let artifact_paths: Vec<&Path> = artifacts.iter().map(|a| a.path.as_path()).collect();
     let last_modified = latest_change(root, &artifact_paths, cancel);
-    let regenerate = regenerate_steps(&ecosystem_ids, &package_managers, node_version.as_deref(), &artifacts, ecosystems);
+    let regenerate = regenerate_steps(
+        &ecosystem_ids,
+        &package_managers,
+        node_version.as_deref(),
+        &artifacts,
+        ecosystems,
+    );
 
     Project {
-        name: root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        name: root
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
         root: root.to_path_buf(),
         ecosystems: ecosystem_ids,
         members,
@@ -268,7 +279,10 @@ fn find_named(dir: &Path, name: &str, artifact_names: &BTreeSet<&str>, found: &m
     for (child_name, path) in subdirs(dir) {
         if child_name == name {
             found(path);
-        } else if child_name != ".git" && !NEVER_ENTER.contains(&child_name.as_str()) && !artifact_names.contains(child_name.as_str()) {
+        } else if child_name != ".git"
+            && !NEVER_ENTER.contains(&child_name.as_str())
+            && !artifact_names.contains(child_name.as_str())
+        {
             find_named(&path, name, artifact_names, found);
         }
     }
@@ -295,7 +309,11 @@ fn node_version(root: &Path) -> Option<String> {
             }
         }
     }
-    read_package_json(root)?.get("engines")?.get("node")?.as_str().map(str::to_string)
+    read_package_json(root)?
+        .get("engines")?
+        .get("node")?
+        .as_str()
+        .map(str::to_string)
 }
 
 fn unix(time: SystemTime) -> Option<i64> {
@@ -355,7 +373,12 @@ fn regenerate_steps(
     // Every other ecosystem adds its catalog text, so a Node + Rust project keeps `cargo build`.
     // The Tauri text already covers the Rust build of `src-tauri`.
     let covered = |id: &str| matches!(id, "node" | "flutter" | "react-native") || (id == "rust" && has("tauri"));
-    steps.extend(ecosystems.iter().filter(|e| has(&e.id) && !covered(&e.id)).map(|e| e.regenerate.clone()));
+    steps.extend(
+        ecosystems
+            .iter()
+            .filter(|e| has(&e.id) && !covered(&e.id))
+            .map(|e| e.regenerate.clone()),
+    );
     steps
 }
 
@@ -424,15 +447,33 @@ mod tests {
         let client = &projects[0];
         assert_eq!(client.ecosystems, vec!["node", "rust", "tauri"]);
         assert_eq!(client.node_version.as_deref(), Some("22"));
-        let client_artifacts: Vec<_> = client.artifacts.iter().map(|a| a.path.strip_prefix(&client.root).unwrap().to_path_buf()).collect();
+        let client_artifacts: Vec<_> = client
+            .artifacts
+            .iter()
+            .map(|a| a.path.strip_prefix(&client.root).unwrap().to_path_buf())
+            .collect();
         assert_eq!(client_artifacts, vec![PathBuf::from("src-tauri/target")]);
 
         let tools = &projects[1];
-        let tool_artifacts: Vec<_> = tools.artifacts.iter().map(|a| a.path.strip_prefix(&tools.root).unwrap().to_path_buf()).collect();
-        assert_eq!(tool_artifacts, vec![PathBuf::from(".venv"), PathBuf::from("__pycache__"), PathBuf::from("pkg/__pycache__")]);
+        let tool_artifacts: Vec<_> = tools
+            .artifacts
+            .iter()
+            .map(|a| a.path.strip_prefix(&tools.root).unwrap().to_path_buf())
+            .collect();
+        assert_eq!(
+            tool_artifacts,
+            vec![
+                PathBuf::from(".venv"),
+                PathBuf::from("__pycache__"),
+                PathBuf::from("pkg/__pycache__")
+            ]
+        );
 
         let website = &projects[2];
-        assert_eq!(website.package_managers, vec![PackageManager::Npm, PackageManager::Pnpm]);
+        assert_eq!(
+            website.package_managers,
+            vec![PackageManager::Npm, PackageManager::Pnpm]
+        );
         assert_eq!(website.node_version.as_deref(), Some(">=20"));
         assert_eq!(website.artifacts.len(), 2);
         assert!(website.reclaimable() > 0);
@@ -456,7 +497,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let catalog = Catalog::embedded().unwrap();
         let rn = catalog.ecosystems.iter().find(|e| e.id == "react-native").unwrap();
-        write(&dir.path().join("a/package.json"), r#"{"dependencies":{"react-native":"0.81.0"}}"#);
+        write(
+            &dir.path().join("a/package.json"),
+            r#"{"dependencies":{"react-native":"0.81.0"}}"#,
+        );
         write(&dir.path().join("b/package.json"), r#"{"dependencies":{"react":"19"}}"#);
         assert!(detects(rn, &dir.path().join("a")));
         assert!(!detects(rn, &dir.path().join("b")));
@@ -469,7 +513,12 @@ mod tests {
         write(&root.join("package.json"), "{}");
         write(&root.join("node_modules/x/index.js"), "x");
         let old = SystemTime::now() - Duration::from_secs(90 * 24 * 3600);
-        fs::File::options().write(true).open(root.join("package.json")).unwrap().set_modified(old).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(root.join("package.json"))
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
         let projects = analyze_all(dir.path());
         let project = &projects[0];
         // node_modules was just written, but only package.json counts.

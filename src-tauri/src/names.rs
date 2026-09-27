@@ -71,7 +71,10 @@ impl Namer {
 
     /// Plain name of a folder listed by a rule, following how the rule groups its folders.
     pub fn child_title(&self, group_by: GroupBy, path: &Path) -> String {
-        let folder = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let folder = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
         match group_by {
             GroupBy::App => self.app_name(&folder).unwrap_or(folder),
             GroupBy::XcodeProject => strip_derived_data_hash(&folder).to_string(),
@@ -98,7 +101,11 @@ fn read_bundle(app: &Path) -> Option<(String, String)> {
     let id = dict.get("CFBundleIdentifier")?.as_string()?.to_string();
     let name = ["CFBundleDisplayName", "CFBundleName"]
         .iter()
-        .find_map(|key| dict.get(key).and_then(|v| v.as_string()).filter(|s| !s.trim().is_empty()))
+        .find_map(|key| {
+            dict.get(key)
+                .and_then(|v| v.as_string())
+                .filter(|s| !s.trim().is_empty())
+        })
         .map(str::to_string)
         .or_else(|| app.file_stem().map(|s| s.to_string_lossy().into_owned()))?;
     Some((id, name))
@@ -118,7 +125,9 @@ mod tests {
 
     #[test]
     fn names_caches_after_their_application() {
-        let namer = Namer::default().with_bundle("com.spotify.client", "Spotify").with_bundle("com.brave.Browser", "Brave Browser");
+        let namer = Namer::default()
+            .with_bundle("com.spotify.client", "Spotify")
+            .with_bundle("com.brave.Browser", "Brave Browser");
         let title = |folder: &str| namer.child_title(GroupBy::App, &Path::new("/c").join(folder));
         assert_eq!(title("com.spotify.client"), "Spotify");
         assert_eq!(title("com.microsoft.VSCode.ShipIt"), "Visual Studio Code");

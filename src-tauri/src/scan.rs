@@ -38,15 +38,27 @@ pub enum Action {
         /// Run the project guards (tracked files, `.env`, nested repository) before deleting.
         project_guards: bool,
     },
-    Command { program: String, args: Vec<String> },
+    Command {
+        program: String,
+        args: Vec<String>,
+    },
 }
 
 impl Action {
     /// Deletion of `paths`. Data that may not come back (risk 2 and 3) goes to the trash:
     /// this is the only place that decides it.
     pub fn delete(paths: Vec<PathBuf>, risk: Risk, extra_roots: Vec<PathBuf>, project_guards: bool) -> Action {
-        let disposal = if risk >= Risk::Review { Disposal::Trash } else { Disposal::Delete };
-        Action::Delete { paths, disposal, extra_roots, project_guards }
+        let disposal = if risk >= Risk::Review {
+            Disposal::Trash
+        } else {
+            Disposal::Delete
+        };
+        Action::Delete {
+            paths,
+            disposal,
+            extra_roots,
+            project_guards,
+        }
     }
 
     pub fn disposal(&self) -> Option<Disposal> {
@@ -60,7 +72,10 @@ impl Action {
     pub fn describe(&self) -> Vec<String> {
         match self {
             Action::Delete { paths, .. } => paths.iter().map(|p| p.display().to_string()).collect(),
-            Action::Command { program, args } => vec![std::iter::once(program.as_str()).chain(args.iter().map(String::as_str)).collect::<Vec<_>>().join(" ")],
+            Action::Command { program, args } => vec![std::iter::once(program.as_str())
+                .chain(args.iter().map(String::as_str))
+                .collect::<Vec<_>>()
+                .join(" ")],
         }
     }
 }
@@ -94,9 +109,19 @@ fn serialize_disposal<S: serde::Serializer>(action: &Action, serializer: S) -> R
 /// Whether developer tools are present, which turns on the developer module.
 pub fn developer_detected(env: &PathEnv) -> bool {
     let home = env.home();
-    let folders = ["Library/Developer", ".android", ".cargo", ".pub-cache", ".npm", ".gradle", ".docker"];
+    let folders = [
+        "Library/Developer",
+        ".android",
+        ".cargo",
+        ".pub-cache",
+        ".npm",
+        ".gradle",
+        ".docker",
+    ];
     folders.iter().any(|f| home.join(f).exists())
-        || ["node", "docker", "flutter", "cargo", "xcrun"].iter().any(|p| process::has_program(p))
+        || ["node", "docker", "flutter", "cargo", "xcrun"]
+            .iter()
+            .any(|p| process::has_program(p))
 }
 
 /// Rules shown on this system: right platform, right profile, required programs installed.
@@ -134,7 +159,11 @@ pub fn rule_items(env: &PathEnv, rules: &[&Rule], namer: &Namer, seen: &Seen, ca
         .par_iter()
         .zip(resolved.par_iter())
         .flat_map_iter(|(rule, matched)| {
-            let claimed = if rule.profile == Profile::General { claimed.as_slice() } else { &[] };
+            let claimed = if rule.profile == Profile::General {
+                claimed.as_slice()
+            } else {
+                &[]
+            };
             items_for_rule(env, rule, matched.clone(), claimed, namer, seen, cancel)
         })
         .collect()
@@ -162,7 +191,9 @@ fn items_for_rule(
             // A pattern that cannot be compiled excludes nothing it could have matched: drop the path.
             let exclusions: Vec<Option<glob::Pattern>> = exclude.iter().map(|p| env.compile(p).ok()).collect();
             matched.retain(|path| {
-                let excluded = exclusions.iter().any(|p| p.as_ref().is_none_or(|p| p.matches_path(path)));
+                let excluded = exclusions
+                    .iter()
+                    .any(|p| p.as_ref().is_none_or(|p| p.matches_path(path)));
                 let is_claimed = claimed.iter().any(|c| path.starts_with(c));
                 !excluded && !is_claimed
             });
@@ -183,7 +214,10 @@ fn items_for_rule(
                     // Folders of the same application (`BraveSoftware`, `com.brave.Browser`) form one item.
                     let mut groups: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
                     for path in matched {
-                        groups.entry(namer.child_title(rule.group_by, &path)).or_default().push(path);
+                        groups
+                            .entry(namer.child_title(rule.group_by, &path))
+                            .or_default()
+                            .push(path);
                     }
                     groups
                         .into_iter()
@@ -204,12 +238,19 @@ fn items_for_rule(
                         n => format!("{n} éléments"),
                     };
                     let item = make(rule.id.clone(), rule.title.clone(), Some(detail), matched);
-                    if item.size > 0 { vec![item] } else { Vec::new() }
+                    if item.size > 0 {
+                        vec![item]
+                    } else {
+                        Vec::new()
+                    }
                 }
             }
         }
         Target::Command { program, args, measure } => {
-            let action = Action::Command { program: program.clone(), args: args.clone() };
+            let action = Action::Command {
+                program: program.clone(),
+                args: args.clone(),
+            };
             vec![Item {
                 id: rule.id.clone(),
                 rule: rule.id.clone(),
@@ -230,7 +271,15 @@ fn items_for_rule(
 
 /// Folders searched for projects: the home folder, without system and media folders.
 pub fn project_roots(env: &PathEnv) -> Vec<PathBuf> {
-    const SKIP: &[&str] = &["Library", "Applications", "Pictures", "Movies", "Music", "Public", "AppData"];
+    const SKIP: &[&str] = &[
+        "Library",
+        "Applications",
+        "Pictures",
+        "Movies",
+        "Music",
+        "Public",
+        "AppData",
+    ];
     let mut roots: Vec<PathBuf> = projects::subdirs(env.home())
         .into_iter()
         .filter(|(name, _)| !projects::is_hidden(name) && !SKIP.contains(&name.as_str()))
@@ -256,7 +305,10 @@ pub fn scan_projects(env: &PathEnv, ecosystems: &[Ecosystem], seen: &Seen, cance
             found.extend(projects::find_roots(std::slice::from_ref(root), ecosystems, cancel));
         }
     }
-    let mut projects: Vec<Project> = found.par_iter().map(|root| projects::analyze(root, ecosystems, seen, cancel)).collect();
+    let mut projects: Vec<Project> = found
+        .par_iter()
+        .map(|root| projects::analyze(root, ecosystems, seen, cancel))
+        .collect();
     projects.sort_by_key(|p| std::cmp::Reverse(p.reclaimable()));
     projects
 }
@@ -293,12 +345,19 @@ pub fn project_items(projects: &[Project], ecosystems: &[Ecosystem]) -> Vec<Item
 pub fn apply_project_guards(items: &mut [Item]) {
     let git = guards::git_available();
     items.par_iter_mut().for_each(|item| {
-        if let Action::Delete { paths, project_guards: true, .. } = &item.action {
+        if let Action::Delete {
+            paths,
+            project_guards: true,
+            ..
+        } = &item.action
+        {
             for path in paths {
                 let result = if git {
                     guards::check_artifact(path)
                 } else {
-                    Err(guards::Blocked::GitError { message: "git n'est pas disponible".into() })
+                    Err(guards::Blocked::GitError {
+                        message: "git n'est pas disponible".into(),
+                    })
                 };
                 if let Err(blocked) = result {
                     item.blocked = Some(describe_blocked(&blocked));
@@ -312,19 +371,29 @@ pub fn apply_project_guards(items: &mut [Item]) {
 pub fn describe_blocked(blocked: &guards::Blocked) -> String {
     match blocked {
         guards::Blocked::TrackedFiles { count } => {
-            format!("Contient {count} fichier{} suivi{} par git : ce dossier fait partie du code.", plural(*count), plural(*count))
+            format!(
+                "Contient {count} fichier{} suivi{} par git : ce dossier fait partie du code.",
+                plural(*count),
+                plural(*count)
+            )
         }
         guards::Blocked::ContainsRepository => "Contient son propre dépôt git.".into(),
         guards::Blocked::EnvFile { path } => format!(
             "Contient un fichier de configuration ({}).",
-            path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+            path.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
         ),
         guards::Blocked::GitError { message } => format!("Impossible de vérifier avec git : {message}"),
     }
 }
 
 fn plural(count: usize) -> &'static str {
-    if count > 1 { "s" } else { "" }
+    if count > 1 {
+        "s"
+    } else {
+        ""
+    }
 }
 
 /// Everything found, grouped for the interface.
@@ -351,7 +420,12 @@ impl ScanResult {
     /// The items with these ids, in scan order, in one pass over the items.
     pub fn items_with_ids(&self, ids: &[String]) -> Result<Vec<Item>, String> {
         let wanted: HashSet<&str> = ids.iter().map(String::as_str).collect();
-        let found: Vec<Item> = self.items.iter().filter(|i| wanted.contains(i.id.as_str())).cloned().collect();
+        let found: Vec<Item> = self
+            .items
+            .iter()
+            .filter(|i| wanted.contains(i.id.as_str()))
+            .cloned()
+            .collect();
         if found.len() != wanted.len() {
             return Err("Certains éléments ont changé depuis l'analyse. Relancez l'analyse.".into());
         }
@@ -386,14 +460,23 @@ mod tests {
         let rules = active_rules(&catalog, Os::Macos, false);
         let items = rule_items(&env, &rules, &Namer::default(), &Seen::default(), &cancel);
         let caches: Vec<_> = items.iter().filter(|i| i.rule == "macos.app-caches").collect();
-        assert_eq!(caches.len(), 2, "without the developer module, Yarn is an ordinary cache");
+        assert_eq!(
+            caches.len(),
+            2,
+            "without the developer module, Yarn is an ordinary cache"
+        );
         let spotify = home.join("Library/Caches/com.spotify.client").display().to_string();
         assert!(caches.iter().any(|i| i.detail.as_deref() == Some(spotify.as_str())));
 
         let installers = items.iter().find(|i| i.rule == "macos.old-installers").unwrap();
-        assert_eq!(installers.action.describe(), vec![home.join("Downloads/setup.dmg").display().to_string()]);
+        assert_eq!(
+            installers.action.describe(),
+            vec![home.join("Downloads/setup.dmg").display().to_string()]
+        );
         assert!(items.iter().any(|i| i.rule == "macos.logs" && i.size >= 10_000));
-        assert!(items.iter().all(|i| catalog.rule(&i.rule).unwrap().profile == Profile::General));
+        assert!(items
+            .iter()
+            .all(|i| catalog.rule(&i.rule).unwrap().profile == Profile::General));
     }
 
     #[test]

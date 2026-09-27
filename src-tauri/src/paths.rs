@@ -41,15 +41,60 @@ struct Token {
 }
 
 const TOKENS: &[Token] = &[
-    Token { name: "~", var: None, fixed: None, wildcard_children: false },
-    Token { name: "%TEMP%", var: Some("TEMP"), fixed: None, wildcard_children: true },
-    Token { name: "%LOCALAPPDATA%", var: Some("LOCALAPPDATA"), fixed: None, wildcard_children: false },
-    Token { name: "%APPDATA%", var: Some("APPDATA"), fixed: None, wildcard_children: false },
-    Token { name: "%USERPROFILE%", var: Some("USERPROFILE"), fixed: None, wildcard_children: false },
-    Token { name: "%PROGRAMDATA%", var: Some("PROGRAMDATA"), fixed: None, wildcard_children: false },
-    Token { name: "%WINDIR%", var: Some("WINDIR"), fixed: None, wildcard_children: false },
-    Token { name: "%SYSTEMDRIVE%", var: Some("SYSTEMDRIVE"), fixed: None, wildcard_children: false },
-    Token { name: "/Applications", var: None, fixed: Some("/Applications"), wildcard_children: false },
+    Token {
+        name: "~",
+        var: None,
+        fixed: None,
+        wildcard_children: false,
+    },
+    Token {
+        name: "%TEMP%",
+        var: Some("TEMP"),
+        fixed: None,
+        wildcard_children: true,
+    },
+    Token {
+        name: "%LOCALAPPDATA%",
+        var: Some("LOCALAPPDATA"),
+        fixed: None,
+        wildcard_children: false,
+    },
+    Token {
+        name: "%APPDATA%",
+        var: Some("APPDATA"),
+        fixed: None,
+        wildcard_children: false,
+    },
+    Token {
+        name: "%USERPROFILE%",
+        var: Some("USERPROFILE"),
+        fixed: None,
+        wildcard_children: false,
+    },
+    Token {
+        name: "%PROGRAMDATA%",
+        var: Some("PROGRAMDATA"),
+        fixed: None,
+        wildcard_children: false,
+    },
+    Token {
+        name: "%WINDIR%",
+        var: Some("WINDIR"),
+        fixed: None,
+        wildcard_children: false,
+    },
+    Token {
+        name: "%SYSTEMDRIVE%",
+        var: Some("SYSTEMDRIVE"),
+        fixed: None,
+        wildcard_children: false,
+    },
+    Token {
+        name: "/Applications",
+        var: None,
+        fixed: Some("/Applications"),
+        wildcard_children: false,
+    },
 ];
 
 /// The folders tokens resolve to. Built from the real system, or by hand in tests.
@@ -61,7 +106,10 @@ pub struct PathEnv {
 
 impl PathEnv {
     pub fn new(home: impl Into<PathBuf>) -> Self {
-        PathEnv { home: home.into(), vars: HashMap::new() }
+        PathEnv {
+            home: home.into(),
+            vars: HashMap::new(),
+        }
     }
 
     /// Reads the home folder and the token variables of the running system.
@@ -128,7 +176,10 @@ impl PathEnv {
     /// Existing paths matched by any of `patterns`. Patterns that cannot be expanded here
     /// (a Windows token on macOS, for example) match nothing.
     pub fn resolve_all(&self, patterns: &[String]) -> Vec<PathBuf> {
-        patterns.iter().flat_map(|p| self.resolve(p).unwrap_or_default()).collect()
+        patterns
+            .iter()
+            .flat_map(|p| self.resolve(p).unwrap_or_default())
+            .collect()
     }
 
     /// Compiles a pattern once, to test many paths against it (exclusions).
@@ -169,7 +220,9 @@ pub fn validate_pattern(pattern: &str) -> Result<(), PatternError> {
     }
     let components: Vec<&str> = rest.split('/').collect();
     if pattern.contains('\\')
-        || components.iter().any(|c| c.is_empty() || *c == "." || *c == ".." || c.contains("**"))
+        || components
+            .iter()
+            .any(|c| c.is_empty() || *c == "." || *c == ".." || c.contains("**"))
     {
         return Err(PatternError::Forbidden(pattern.to_string()));
     }
@@ -195,12 +248,27 @@ mod tests {
 
         assert!(matches!(validate_pattern("~"), Err(PatternError::TooBroad(_))));
         assert!(matches!(validate_pattern("~/*"), Err(PatternError::TooBroad(_))));
-        assert!(matches!(validate_pattern("/Applications/*"), Err(PatternError::TooBroad(_))));
-        assert!(matches!(validate_pattern("~/Library/../Documents"), Err(PatternError::Forbidden(_))));
-        assert!(matches!(validate_pattern("~/Library/**/Caches"), Err(PatternError::Forbidden(_))));
+        assert!(matches!(
+            validate_pattern("/Applications/*"),
+            Err(PatternError::TooBroad(_))
+        ));
+        assert!(matches!(
+            validate_pattern("~/Library/../Documents"),
+            Err(PatternError::Forbidden(_))
+        ));
+        assert!(matches!(
+            validate_pattern("~/Library/**/Caches"),
+            Err(PatternError::Forbidden(_))
+        ));
         assert!(matches!(validate_pattern("~//x"), Err(PatternError::Forbidden(_))));
-        assert!(matches!(validate_pattern("/etc/hosts"), Err(PatternError::UnknownToken(_))));
-        assert!(matches!(validate_pattern("~foo/bar"), Err(PatternError::UnknownToken(_))));
+        assert!(matches!(
+            validate_pattern("/etc/hosts"),
+            Err(PatternError::UnknownToken(_))
+        ));
+        assert!(matches!(
+            validate_pattern("~foo/bar"),
+            Err(PatternError::UnknownToken(_))
+        ));
     }
 
     #[test]
@@ -214,7 +282,10 @@ mod tests {
 
         let env = PathEnv::new(&home);
         let found = env.resolve("~/Library/Caches/*").unwrap();
-        let names: Vec<_> = found.iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        let names: Vec<_> = found
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
         assert_eq!(names, vec![".hidden", "com.spotify.client", "loose file.bin"]);
     }
 
@@ -224,7 +295,10 @@ mod tests {
         fs::write(dir.path().join("a.tmp"), b"x").unwrap();
         let env = PathEnv::new("/nowhere").with_var("TEMP", dir.path());
         assert_eq!(env.resolve("%TEMP%/*").unwrap(), vec![dir.path().join("a.tmp")]);
-        assert!(matches!(env.resolve("%LOCALAPPDATA%/x"), Err(PatternError::UnsetToken(_, _))));
+        assert!(matches!(
+            env.resolve("%LOCALAPPDATA%/x"),
+            Err(PatternError::UnsetToken(_, _))
+        ));
     }
 
     #[test]

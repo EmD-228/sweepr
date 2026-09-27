@@ -38,8 +38,10 @@ impl Catalog {
     pub fn from_sources(sources: &[(&str, &str)]) -> Result<Catalog, CatalogError> {
         let mut files = Vec::with_capacity(sources.len());
         for (name, text) in sources {
-            let file: CatalogFile =
-                toml::from_str(text).map_err(|source| CatalogError::Parse { file: name.to_string(), source })?;
+            let file: CatalogFile = toml::from_str(text).map_err(|source| CatalogError::Parse {
+                file: name.to_string(),
+                source,
+            })?;
             files.push((*name, file));
         }
         let refs: Vec<(&str, &CatalogFile)> = files.iter().map(|(n, f)| (*n, f)).collect();

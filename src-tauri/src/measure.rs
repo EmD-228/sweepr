@@ -72,7 +72,12 @@ struct Stabilizer {
 
 impl Stabilizer {
     fn new(baseline: u64, estimate: u64, config: StabilityConfig) -> Self {
-        Stabilizer { config, baseline, estimate, samples: Vec::new() }
+        Stabilizer {
+            config,
+            baseline,
+            estimate,
+            samples: Vec::new(),
+        }
     }
 
     fn push(&mut self, elapsed: Duration, free: u64) -> GainProgress {
@@ -105,7 +110,12 @@ impl Stabilizer {
         } else {
             GainState::Recovering
         };
-        GainProgress { gain, estimate: self.estimate, elapsed_secs: elapsed.as_secs(), state }
+        GainProgress {
+            gain,
+            estimate: self.estimate,
+            elapsed_secs: elapsed.as_secs(),
+            state,
+        }
     }
 }
 
@@ -120,7 +130,12 @@ pub fn follow(
 ) -> GainProgress {
     let mut stabilizer = Stabilizer::new(baseline, estimate, config);
     let mut elapsed = Duration::ZERO;
-    let mut last = GainProgress { gain: 0, estimate, elapsed_secs: 0, state: GainState::Recovering };
+    let mut last = GainProgress {
+        gain: 0,
+        estimate,
+        elapsed_secs: 0,
+        state: GainState::Recovering,
+    };
     loop {
         if let Ok(free) = sample() {
             last = stabilizer.push(elapsed, free);
@@ -129,7 +144,10 @@ pub fn follow(
                 return last;
             }
         } else if elapsed >= config.timeout {
-            let last = GainProgress { state: GainState::TimedOut, ..last };
+            let last = GainProgress {
+                state: GainState::TimedOut,
+                ..last
+            };
             on_progress(last);
             return last;
         }

@@ -55,21 +55,37 @@ fn check(path: &Path, policy: &SafetyPolicy, project_guards: bool) -> Result<Pat
     })?;
     if project_guards {
         if !guards::git_available() {
-            return Err(format!("{} : git n'est pas disponible pour vérifier le projet.", path.display()));
+            return Err(format!(
+                "{} : git n'est pas disponible pour vérifier le projet.",
+                path.display()
+            ));
         }
-        guards::check_artifact(path).map_err(|blocked| format!("{} : {}", path.display(), describe_blocked(&blocked)))?;
+        guards::check_artifact(path)
+            .map_err(|blocked| format!("{} : {}", path.display(), describe_blocked(&blocked)))?;
     }
     Ok(real)
 }
 
 fn policy_for(home: &Path, extra_roots: &[PathBuf]) -> SafetyPolicy {
-    extra_roots.iter().fold(SafetyPolicy::new(home), |p, root| p.allow_root(root))
+    extra_roots
+        .iter()
+        .fold(SafetyPolicy::new(home), |p, root| p.allow_root(root))
 }
 
 pub fn preview(item: &Item, home: &Path) -> Preview {
-    let mut preview = Preview { id: item.id.clone(), actions: Vec::new(), disposal: item.action.disposal(), skipped: Vec::new() };
+    let mut preview = Preview {
+        id: item.id.clone(),
+        actions: Vec::new(),
+        disposal: item.action.disposal(),
+        skipped: Vec::new(),
+    };
     match &item.action {
-        Action::Delete { paths, extra_roots, project_guards, .. } => {
+        Action::Delete {
+            paths,
+            extra_roots,
+            project_guards,
+            ..
+        } => {
             let policy = policy_for(home, extra_roots);
             for path in paths {
                 match check(path, &policy, *project_guards) {
@@ -85,10 +101,20 @@ pub fn preview(item: &Item, home: &Path) -> Preview {
 
 pub fn execute(item: &Item, home: &Path) -> Report {
     if let Some(reason) = &item.blocked {
-        return Report { id: item.id.clone(), status: Status::Skipped, cleaned: 0, messages: vec![reason.clone()] };
+        return Report {
+            id: item.id.clone(),
+            status: Status::Skipped,
+            cleaned: 0,
+            messages: vec![reason.clone()],
+        };
     }
     match &item.action {
-        Action::Delete { paths, disposal, extra_roots, project_guards } => {
+        Action::Delete {
+            paths,
+            disposal,
+            extra_roots,
+            project_guards,
+        } => {
             let mut cleaned = 0;
             let mut skipped = 0;
             let mut failed = 0;
@@ -121,19 +147,37 @@ pub fn execute(item: &Item, home: &Path) -> Report {
                 (_, 0) => Status::Done,
                 _ => Status::Partial,
             };
-            Report { id: item.id.clone(), status, cleaned, messages }
+            Report {
+                id: item.id.clone(),
+                status,
+                cleaned,
+                messages,
+            }
         }
         Action::Command { program, args } => {
             let args: Vec<&str> = args.iter().map(String::as_str).collect();
             match process::run(program, &args, home, COMMAND_TIMEOUT) {
-                Ok(output) if output.status.success() => {
-                    Report { id: item.id.clone(), status: Status::Done, cleaned: 1, messages: Vec::new() }
-                }
+                Ok(output) if output.status.success() => Report {
+                    id: item.id.clone(),
+                    status: Status::Done,
+                    cleaned: 1,
+                    messages: Vec::new(),
+                },
                 Ok(output) => {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    Report { id: item.id.clone(), status: Status::Failed, cleaned: 0, messages: vec![describe_command_error(program, &stderr)] }
+                    Report {
+                        id: item.id.clone(),
+                        status: Status::Failed,
+                        cleaned: 0,
+                        messages: vec![describe_command_error(program, &stderr)],
+                    }
                 }
-                Err(e) => Report { id: item.id.clone(), status: Status::Failed, cleaned: 0, messages: vec![describe_io(&e)] },
+                Err(e) => Report {
+                    id: item.id.clone(),
+                    status: Status::Failed,
+                    cleaned: 0,
+                    messages: vec![describe_io(&e)],
+                },
             }
         }
     }
@@ -141,7 +185,9 @@ pub fn execute(item: &Item, home: &Path) -> Report {
 
 fn describe_io(error: &std::io::Error) -> String {
     match error.kind() {
-        std::io::ErrorKind::PermissionDenied => "accès refusé (fichier protégé par le système ou utilisé par une application).".into(),
+        std::io::ErrorKind::PermissionDenied => {
+            "accès refusé (fichier protégé par le système ou utilisé par une application).".into()
+        }
         std::io::ErrorKind::NotFound => "introuvable.".into(),
         std::io::ErrorKind::TimedOut => "la commande n'a pas terminé à temps.".into(),
         _ => error.to_string(),
@@ -156,7 +202,11 @@ fn describe_command_error(program: &str, stderr: &str) -> String {
     if stderr.contains("Corepack") || stderr.contains("packageManager") {
         return format!("{program} a refusé de s'exécuter : un projet impose un autre gestionnaire de paquets.");
     }
-    let last = stderr.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("erreur inconnue");
+    let last = stderr
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("erreur inconnue");
     format!("{program} a échoué : {}", last.trim())
 }
 
@@ -188,7 +238,10 @@ mod tests {
         let cache = home.join("Library/Caches/app");
         fs::create_dir_all(&cache).unwrap();
         fs::write(cache.join("f"), "x").unwrap();
-        let item = delete_item(vec![cache.clone(), home.join("Documents"), home.join("Library/Caches/gone")], false);
+        let item = delete_item(
+            vec![cache.clone(), home.join("Documents"), home.join("Library/Caches/gone")],
+            false,
+        );
 
         let preview = preview(&item, &home);
         assert_eq!(preview.actions, vec![cache.display().to_string()]);
@@ -215,8 +268,14 @@ mod tests {
 
     #[test]
     fn explains_known_command_errors() {
-        let message = describe_command_error("docker", "Cannot connect to the Docker daemon at unix:///var/run/docker.sock.");
+        let message = describe_command_error(
+            "docker",
+            "Cannot connect to the Docker daemon at unix:///var/run/docker.sock.",
+        );
         assert!(message.starts_with("Docker n'est pas lancé"));
-        assert_eq!(describe_command_error("npm", "npm ERR! boom\n\n"), "npm a échoué : npm ERR! boom");
+        assert_eq!(
+            describe_command_error("npm", "npm ERR! boom\n\n"),
+            "npm a échoué : npm ERR! boom"
+        );
     }
 }

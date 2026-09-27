@@ -71,6 +71,7 @@ target = { kind = "command", program = "brew", args = ["cleanup", "--prune=all"]
 ```sh
 pnpm install
 pnpm check
+cargo fmt --manifest-path src-tauri/Cargo.toml    # formats the Rust code; CI checks it
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```

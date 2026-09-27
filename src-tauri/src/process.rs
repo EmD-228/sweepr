@@ -16,7 +16,13 @@ use std::time::{Duration, Instant};
 const MARKER: &str = "__SWEEPR_PATH__";
 
 /// Folders where developer tools usually live, added when the login shell cannot be read.
-const COMMON_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin", "~/.cargo/bin", "~/.volta/bin", "~/.local/bin"];
+const COMMON_DIRS: &[&str] = &[
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "~/.cargo/bin",
+    "~/.volta/bin",
+    "~/.local/bin",
+];
 
 static SEARCH_PATH: OnceLock<OsString> = OnceLock::new();
 
@@ -24,7 +30,9 @@ static SEARCH_PATH: OnceLock<OsString> = OnceLock::new();
 pub fn search_path() -> &'static OsString {
     SEARCH_PATH.get_or_init(|| {
         let current = std::env::var_os("PATH").unwrap_or_default();
-        let mut dirs: Vec<_> = login_shell_path().map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
+        let mut dirs: Vec<_> = login_shell_path()
+            .map(|p| std::env::split_paths(&p).collect())
+            .unwrap_or_default();
         dirs.extend(std::env::split_paths(&current));
         let home = dirs::home_dir();
         for dir in COMMON_DIRS {
@@ -102,7 +110,11 @@ pub fn find_program(program: &str) -> Option<PathBuf> {
     let extensions: &[&str] = if cfg!(windows) { &["exe", "cmd", "bat"] } else { &[""] };
     let found = std::env::split_paths(search_path()).find_map(|dir| {
         extensions.iter().find_map(|ext| {
-            let candidate = if ext.is_empty() { dir.join(program) } else { dir.join(format!("{program}.{ext}")) };
+            let candidate = if ext.is_empty() {
+                dir.join(program)
+            } else {
+                dir.join(format!("{program}.{ext}"))
+            };
             candidate.is_file().then_some(candidate)
         })
     });
@@ -131,7 +143,10 @@ pub fn command(program: &str, args: &[&str], cwd: &Path) -> io::Result<Command> 
 
 /// Runs `program` and returns its output, killing it after `timeout`.
 pub fn run(program: &str, args: &[&str], cwd: &Path, timeout: Duration) -> io::Result<Output> {
-    let mut child = command(program, args, cwd)?.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let mut child = command(program, args, cwd)?
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
     // Read the pipes on threads so a verbose program cannot block on a full pipe.
     let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
@@ -151,7 +166,11 @@ pub fn run(program: &str, args: &[&str], cwd: &Path, timeout: Duration) -> io::R
     });
     let status = wait_with_timeout(&mut child, timeout)
         .ok_or_else(|| io::Error::new(io::ErrorKind::TimedOut, format!("`{program}` did not finish in time")))?;
-    Ok(Output { status, stdout: out_reader.join().unwrap_or_default(), stderr: err_reader.join().unwrap_or_default() })
+    Ok(Output {
+        status,
+        stdout: out_reader.join().unwrap_or_default(),
+        stderr: err_reader.join().unwrap_or_default(),
+    })
 }
 
 #[cfg(test)]
@@ -161,8 +180,11 @@ mod tests {
     #[test]
     fn runs_a_program_without_shell() {
         let dir = tempfile::tempdir().unwrap();
-        let (program, args): (&str, &[&str]) =
-            if cfg!(windows) { ("cmd", &["/C", "echo", "a;b"]) } else { ("echo", &["a;b", "$HOME"]) };
+        let (program, args): (&str, &[&str]) = if cfg!(windows) {
+            ("cmd", &["/C", "echo", "a;b"])
+        } else {
+            ("echo", &["a;b", "$HOME"])
+        };
         let output = run(program, args, dir.path(), Duration::from_secs(10)).unwrap();
         assert!(output.status.success());
         // Arguments are passed as-is: no shell splits `;` or expands `$HOME`.
@@ -175,7 +197,13 @@ mod tests {
 
     #[test]
     fn reports_missing_programs() {
-        let err = run("sweepr-definitely-not-a-program", &[], Path::new("."), Duration::from_secs(1)).unwrap_err();
+        let err = run(
+            "sweepr-definitely-not-a-program",
+            &[],
+            Path::new("."),
+            Duration::from_secs(1),
+        )
+        .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
     }
 

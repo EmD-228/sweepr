@@ -69,6 +69,7 @@ The same commands gate every pull request in CI (`.github/workflows/build.yml`, 
 
 ```sh
 pnpm check
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
