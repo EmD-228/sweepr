@@ -48,6 +48,25 @@ fn main() {
     }
 
     let start = Instant::now();
+    let mut files = scan::file_items(&env, &rules, &catalog.ecosystems, &items, &cancel);
+    files.sort_by_key(|i| std::cmp::Reverse(i.size));
+    println!(
+        "\n== Gros fichiers et doublons : {} ({:.1} s)",
+        files.len(),
+        start.elapsed().as_secs_f64()
+    );
+    for item in files.iter().take(20) {
+        println!(
+            "{:>9}  {:<18} {}  ({})",
+            human(item.size),
+            item.rule,
+            item.title,
+            item.detail.as_deref().unwrap_or("")
+        );
+    }
+    items.extend(files);
+
+    let start = Instant::now();
     let projects = scan::scan_projects(&env, &catalog.ecosystems, &seen, &cancel);
     let mut artifacts = scan::project_items(&projects, &catalog.ecosystems);
     println!(

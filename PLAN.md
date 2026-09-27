@@ -98,6 +98,7 @@ Les écosystèmes de projets (SPEC 5.4) ont leur propre table : fichiers de dét
 - [ ] tests sur de vrais dépôts git temporaires
 
 ### Lot 4 — fournisseurs développeur
+- [x] gros fichiers (Téléchargements, Films, Bureau, 200 Mo et plus) et doublons (dossiers de l'utilisateur, 1 Mo et plus) : un seul parcours, dépôts git, paquets d'applications et fichiers iCloud non téléchargés ignorés ; gain réel des clones APFS (`ATTR_CMNEXT_PRIVATESIZE`) ; copie gardée comparée octet par octet avant suppression
 - [ ] simulateurs iOS (`xcrun simctl list devices -j`), état « Booted » = en cours
 - [ ] runtimes iOS (`xcrun simctl runtime list -j`), signaler ceux qu'aucun simulateur n'utilise
 - [ ] émulateurs Android (`~/.android/avd`), image système reliée par `image.sysdir.1`, émulateur en cours
@@ -139,4 +140,5 @@ Les écosystèmes de projets (SPEC 5.4) ont leur propre table : fichiers de dét
 
 - 2026-09-25 : plan rédigé. Lots 0, 1, 2, 3, 5 et 6 faits (43 tests). Lot 7 : première version de l'interface (vue d'ensemble, projets, outils, simulation, confirmation à double étape, exécution, gain réel). Reste : lot 4 (fournisseurs : simulateurs, émulateurs, NDK, Docker, gros fichiers, doublons, sauvegardes iPhone), lot 8.
 - Choix v0.1 : en attendant la corbeille de 7 jours (v1.0), les risques 2 et 3 vont dans la corbeille du système.
+- 2026-09-27 : gros fichiers et doublons (50 tests). Scan réel : 0,3 s, aucun doublon hors des dépôts git (vérifié avec `md5`).
 - Découvert au scan réel : une app lancée depuis le Finder n'a pas le `PATH` du shell (`process::search_path`) ; le SDK Flutter ressemblait à un projet (`projects::is_tool_install`).

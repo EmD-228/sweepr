@@ -131,31 +131,43 @@ fn file_usage(meta: &Metadata, seen: &Seen) -> Usage {
 }
 
 #[cfg(unix)]
-fn allocated_of(meta: &Metadata) -> u64 {
+pub(crate) fn allocated_of(meta: &Metadata) -> u64 {
     use std::os::unix::fs::MetadataExt;
     meta.blocks() * 512
 }
 
 #[cfg(not(unix))]
-fn allocated_of(meta: &Metadata) -> u64 {
+pub(crate) fn allocated_of(meta: &Metadata) -> u64 {
     meta.len()
 }
 
 #[cfg(unix)]
-fn device_of(meta: &Metadata) -> u64 {
+pub(crate) fn device_of(meta: &Metadata) -> u64 {
     use std::os::unix::fs::MetadataExt;
     meta.dev()
 }
 
 #[cfg(not(unix))]
-fn device_of(_meta: &Metadata) -> u64 {
+pub(crate) fn device_of(_meta: &Metadata) -> u64 {
     0
+}
+
+/// (device, inode): hard links to the same file share it. `None` where it is not known.
+#[cfg(unix)]
+pub(crate) fn inode_of(meta: &Metadata) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    Some((meta.dev(), meta.ino()))
+}
+
+#[cfg(not(unix))]
+pub(crate) fn inode_of(_meta: &Metadata) -> Option<(u64, u64)> {
+    None
 }
 
 #[cfg(unix)]
 fn hard_link_key(meta: &Metadata) -> Option<(u64, u64)> {
     use std::os::unix::fs::MetadataExt;
-    (meta.nlink() > 1).then(|| (meta.dev(), meta.ino()))
+    inode_of(meta).filter(|_| meta.nlink() > 1)
 }
 
 #[cfg(not(unix))]

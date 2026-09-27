@@ -19,7 +19,7 @@ use crate::guards::{self, RepoStatus};
 use crate::size::{self, Seen, Usage};
 
 /// Folders never entered while looking for projects or for recent activity.
-const NEVER_ENTER: &[&str] = &["node_modules", ".git", "Pods", ".Trash"];
+pub(crate) const NEVER_ENTER: &[&str] = &["node_modules", ".git", "Pods", ".Trash"];
 /// Maximum depth searched below each scan root, and below a project root for members.
 const MAX_DEPTH: usize = 8;
 const MEMBER_DEPTH: usize = 4;
